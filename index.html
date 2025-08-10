@@ -250,6 +250,7 @@
   };
 
   const colorPicker = EL('colorPicker');
+  const themeMeta   = document.querySelector('meta[name="theme-color"]');
 
   function shadeColor(color, percent){
     let f = parseInt(color.slice(1),16), t = percent < 0 ? 0 : 255, p = Math.abs(percent);
@@ -263,6 +264,8 @@
     document.documentElement.style.setProperty('--cat1', shadeColor(hex, 0.15));
     document.documentElement.style.setProperty('--cat2', shadeColor(hex,-0.15));
     document.documentElement.style.setProperty('--catInner', shadeColor(hex, 0.05));
+    document.documentElement.style.setProperty('--accent', hex);
+    if(themeMeta) themeMeta.setAttribute('content', shadeColor(hex, 0.15));
   }
 
   colorPicker.value = state.color;

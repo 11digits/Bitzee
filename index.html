@@ -33,6 +33,8 @@
   .top{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px}
   .title{font-weight:700; letter-spacing:.2px}
   .clock{opacity:.8; font-variant-numeric:tabular-nums}
+  .stars{text-align:center; margin-bottom:6px; font-size:18px; letter-spacing:2px}
+  .app-name{text-align:center; font-weight:700; font-size:24px; margin-bottom:8px}
   .viewport{
     position:relative; aspect-ratio:1.4/1; background:
       radial-gradient(120px 80px at 80% 10%, rgba(255,255,255,.08), transparent 70%),
@@ -40,7 +42,7 @@
     border-radius:12px; border:1px solid rgba(255,255,255,.06); overflow:hidden;
   }
   .pet{
-    position:absolute; inset:auto 0 12% 0; margin:auto; width:44%; min-width:160px; pointer-events:none;
+    position:absolute; inset:auto 0 12% 0; margin:auto; width:44%; min-width:160px; pointer-events:auto; cursor:pointer;
     transition:transform .15s ease; image-rendering:pixelated; transform-origin:50% 50%;
   }
   .pet.happy{animation:bob 1.6s ease-in-out infinite}
@@ -169,11 +171,14 @@
       <button id="setupGo">Start</button>
     </div>
   </div>
+  <h1 class="app-name">Catzee</h1>
   <div class="game" id="game">
     <div class="top">
       <div class="title player-name" id="playerName">Player</div>
       <div class="clock" id="clock">--:--</div>
     </div>
+
+    <div class="stars" id="stars">☆☆☆☆☆</div>
 
     <div class="viewport" id="viewport">
       <svg class="pet happy" id="pet" viewBox="0 0 200 180" xmlns="http://www.w3.org/2000/svg" aria-label="Catzee cat">
@@ -265,6 +270,7 @@
   const defaults = {
     hunger: 80, fun: 80, energy: 80, hygiene: 80,
     ageMinutes: 0, sleeping: false, sick: false, last: Date.now(),
+    stars: 0, starStart: Date.now(),
     sound: true, color: '#6ae3ff', bgColor: '',
     gender: null, name: ''
   };
@@ -284,7 +290,6 @@
   const fxArea = EL('fxArea');
   const bubble = EL('bubble');
   const pet = EL('pet');
-  const viewport = EL('viewport');
   const mouth = EL('mouth');
   const blinkL = EL('blinkL'), blinkR = EL('blinkR');
 
@@ -362,15 +367,7 @@
   bgColorPicker.value = state.bgColor || '#0f1220';
   bgColorPicker.oninput = () => { state.bgColor = bgColorPicker.value; setBgColor(state.bgColor); save(); };
 
-  // Pull-to-refresh spin on the main character
-  let pullStartY = null, pulled = false;
-  viewport.addEventListener('pointerdown', e => {
-    pullStartY = e.clientY; pulled = false;
-  });
-  viewport.addEventListener('pointermove', e => {
-    if(pullStartY === null) return;
-    if(e.clientY - pullStartY > 50) pulled = true;
-  });
+  // Double-tap spin on the main character
   function spinPet(){
     const wasHappy = pet.classList.contains('happy');
     pet.classList.remove('happy');
@@ -380,11 +377,12 @@
       if(wasHappy) pet.classList.add('happy');
     }, {once:true});
   }
-  viewport.addEventListener('pointerup', () => {
-    if(pulled) spinPet();
-    pullStartY = null; pulled = false;
+  let lastTap = 0;
+  pet.addEventListener('pointerup', () => {
+    const now = Date.now();
+    if(now - lastTap < 300) spinPet();
+    lastTap = now;
   });
-  viewport.addEventListener('pointercancel', () => { pullStartY = null; pulled = false; });
 
   // Buttons
   EL('btnFeed').onclick  = () => act('feed');
@@ -457,6 +455,21 @@
 
     state.sick = (state.hunger < 20 || state.hygiene < 20 || state.energy < 10);
     state.ageMinutes += dt;
+    const allGood = ['hunger','fun','energy','hygiene'].every(k => state[k] >= 70);
+    if(allGood){
+      if(!state.starStart) state.starStart = now;
+      if(now - state.starStart >= 3600000){
+        if(state.stars < 5){
+          state.stars++;
+          toast('Star earned! ⭐');
+          spawnConfetti();
+        }
+        state.starStart = now;
+        save();
+      }
+    } else {
+      state.starStart = now;
+    }
     updateUI();
     if(Math.random() < 0.2) save();
   }
@@ -520,6 +533,8 @@
       meters[k].classList.remove('good','warn','bad');
       meters[k].classList.add(v>=66?'good':v>=33?'warn':'bad');
     });
+
+    EL('stars').textContent = '★'.repeat(state.stars) + '☆'.repeat(5 - state.stars);
 
     const agePercent = Math.min(state.ageMinutes / (AGE_MINUTES_PER_LEVEL*10) * 100, 100);
     ageMeter.querySelector('i').style.width = agePercent + '%';

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#6ae3ff">
 <link rel="apple-touch-icon" href="cat-icon.svg">
@@ -18,6 +18,7 @@
     margin:0; font:16px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, sans-serif;
     color:var(--text); background:radial-gradient(1200px 800px at 20% 10%, #1a1f35 0, #0f1220 45%, #0b0e19 100%);
     display:flex; align-items:center; justify-content:center; padding:16px;
+    touch-action:manipulation;
   }
   body.boy{
     background:radial-gradient(1200px 800px at 20% 10%, #1a1f35 0, #0f1220 45%, #0b0e19 100%);
@@ -170,7 +171,7 @@
   </div>
   <div class="game" id="game">
     <div class="top">
-      <div class="title" id="petName">🐱 Catzee</div>
+      <div class="title player-name" id="playerName">Player</div>
       <div class="clock" id="clock">--:--</div>
     </div>
 
@@ -223,6 +224,10 @@
         <label><span>Hygiene</span><b id="hygieneText">100</b></label>
         <div class="meter" id="hygieneMeter"><i></i></div>
       </div>
+      <div class="bar" id="bar-age">
+        <label><span>Age</span><b id="ageLevel">1/10</b></label>
+        <div class="meter" id="ageMeter"><i></i></div>
+      </div>
     </div>
 
     <div class="actions">
@@ -243,6 +248,9 @@
         <label class="color" title="Choose color">
           🎨 <input type="color" id="colorPicker" />
         </label>
+        <label class="color" title="Background color">
+          🌈 <input type="color" id="bgColorPicker" />
+        </label>
       </div>
       <button class="reset" id="btnReset" title="Start over">Reset</button>
     </div>
@@ -257,13 +265,21 @@
   const defaults = {
     hunger: 80, fun: 80, energy: 80, hygiene: 80,
     ageMinutes: 0, sleeping: false, sick: false, last: Date.now(),
-    sound: true, color: '#6ae3ff',
+    sound: true, color: '#6ae3ff', bgColor: '',
     gender: null, name: ''
   };
   const state = Object.assign({}, defaults, load() || {});
 
   const TICK_MS = 1000;
   const DECAY = { hunger: 4, fun: 3, energy: 2, hygiene: 2 };
+  const AGE_MINUTES_PER_LEVEL = 60*24;
+
+  function getAgeLevel(){
+    return Math.min(Math.floor(state.ageMinutes / AGE_MINUTES_PER_LEVEL), 9);
+  }
+  function getMaturity(){
+    return 1 - getAgeLevel()*0.05;
+  }
 
   const fxArea = EL('fxArea');
   const bubble = EL('bubble');
@@ -286,8 +302,11 @@
   };
 
   const colorPicker = EL('colorPicker');
+  const bgColorPicker = EL('bgColorPicker');
   const themeMeta   = document.querySelector('meta[name="theme-color"]');
-  const petNameEl   = EL('petName');
+  const playerNameEl   = EL('playerName');
+  const ageMeter = EL('ageMeter');
+  const ageLevelText = EL('ageLevel');
   const setup       = EL('setup');
   const setupName   = EL('setupName');
   const setupGo     = EL('setupGo');
@@ -308,13 +327,18 @@
     if(themeMeta) themeMeta.setAttribute('content', shadeColor(hex, 0.15));
   }
 
+  function setBgColor(hex){
+    document.body.style.background = `radial-gradient(1200px 800px at 20% 10%, ${shadeColor(hex,0.1)} 0, ${hex} 45%, ${shadeColor(hex,-0.1)} 100%)`;
+  }
+
   function applyGender(){
     document.body.classList.remove('boy','girl');
     document.body.classList.add(state.gender || 'boy');
   }
 
   applyGender();
-  petNameEl.textContent = state.name || '🐱 Catzee';
+  playerNameEl.textContent = state.name ? `😺 ${state.name}` : '🐱 Catzee';
+  if(state.bgColor) setBgColor(state.bgColor);
   if(!state.gender || !state.name){
     setup.style.display = 'flex';
   }
@@ -327,13 +351,16 @@
     state.name = name;
     save();
     applyGender();
-    petNameEl.textContent = state.name;
+    playerNameEl.textContent = `😺 ${state.name}`;
     setup.style.display = 'none';
   };
 
   colorPicker.value = state.color;
   setCatColor(state.color);
   colorPicker.oninput = () => { state.color = colorPicker.value; setCatColor(state.color); save(); };
+
+  bgColorPicker.value = state.bgColor || '#0f1220';
+  bgColorPicker.oninput = () => { state.bgColor = bgColorPicker.value; setBgColor(state.bgColor); save(); };
 
   // Pull-to-refresh spin on the main character
   let pullStartY = null, pulled = false;
@@ -417,10 +444,11 @@
     state.last = now;
 
     const mult = state.sleeping ? 0.3 : 1;
-    state.hunger = clamp(state.hunger - DECAY.hunger*dt*mult, 0, 100);
-    state.fun    = clamp(state.fun    - DECAY.fun*dt*(state.sleeping?0.15:1), 0, 100);
-    state.hygiene= clamp(state.hygiene- DECAY.hygiene*dt, 0, 100);
-    state.energy = clamp(state.energy + (state.sleeping? +18*dt : -DECAY.energy*dt), 0, 100);
+    const maturity = getMaturity();
+    state.hunger = clamp(state.hunger - DECAY.hunger*dt*mult*maturity, 0, 100);
+    state.fun    = clamp(state.fun    - DECAY.fun*dt*(state.sleeping?0.15:1)*maturity, 0, 100);
+    state.hygiene= clamp(state.hygiene- DECAY.hygiene*dt*maturity, 0, 100);
+    state.energy = clamp(state.energy + (state.sleeping? +18*dt : -DECAY.energy*dt*maturity), 0, 100);
 
     if(Math.random() < 0.005 && state.hygiene < 45){
       toast("Uh-oh, a little mess appeared. Clean up! 🧹");
@@ -492,6 +520,10 @@
       meters[k].classList.remove('good','warn','bad');
       meters[k].classList.add(v>=66?'good':v>=33?'warn':'bad');
     });
+
+    const agePercent = Math.min(state.ageMinutes / (AGE_MINUTES_PER_LEVEL*10) * 100, 100);
+    ageMeter.querySelector('i').style.width = agePercent + '%';
+    ageLevelText.textContent = `${getAgeLevel()+1}/10`;
 
     const avg = (state.hunger + state.fun + state.energy + state.hygiene)/4;
     let mood = 'Happy', msg = "I’m feeling great!";
@@ -624,8 +656,9 @@
     const last = state.last || now;
     const minutesAway = (now - last)/60000;
     if(minutesAway > 0.2){
+      const maturity = getMaturity();
       ['hunger','fun','energy','hygiene'].forEach(k=>{
-        state[k] = clamp(state[k] - DECAY[k]*(minutesAway/1), 0, 100);
+        state[k] = clamp(state[k] - DECAY[k]*(minutesAway/1)*maturity, 0, 100);
       });
       state.ageMinutes += minutesAway;
     }

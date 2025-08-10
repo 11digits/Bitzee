@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Bitzee — tiny virtual pet</title>
+<style>
+  :root{
+    --bg:#0f1220; --panel:#1b2038; --accent:#6ae3ff; --good:#4cd964; --warn:#ffcc00; --bad:#ff4d4f; --text:#e9f1ff;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; font:16px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, sans-serif;
+    color:var(--text); background:radial-gradient(1200px 800px at 20% 10%, #1a1f35 0, #0f1220 45%, #0b0e19 100%);
+    display:flex; align-items:center; justify-content:center; padding:16px;
+  }
+  .game{
+    width:min(420px, 92vw); background:var(--panel); border-radius:16px; padding:14px; box-shadow:0 12px 40px rgba(0,0,0,.4);
+    border:1px solid rgba(255,255,255,.06);
+  }
+  .top{
+    display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px;
+  }
+  .title{font-weight:700; letter-spacing:.2px}
+  .clock{opacity:.8; font-variant-numeric:tabular-nums}
+  .viewport{
+    position:relative; aspect-ratio:1.4/1; background:
+      radial-gradient(120px 80px at 80% 10%, rgba(255,255,255,.08), transparent 70%),
+      linear-gradient(180deg, #0e1325 0, #0c1020 100%);
+    border-radius:12px; border:1px solid rgba(255,255,255,.06); overflow:hidden;
+  }
+  /* Pet (inline SVG sized via container) */
+  .pet{
+    position:absolute; inset:auto 0 12% 0; margin:auto; width:44%; min-width:160px; pointer-events:none;
+    transition:transform .15s ease;
+    image-rendering:crisp-edges; image-rendering:pixelated;
+  }
+  .pet.happy{animation:bob 1.6s ease-in-out infinite}
+  .pet.sad{filter:saturate(.7)}
+  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+  .bubble{
+    position:absolute; left:10px; bottom:10px; padding:8px 10px; background:#101429; border:1px solid rgba(255,255,255,.08);
+    border-radius:10px; font-size:13px; opacity:.95;
+  }
+  .fx{
+    position:absolute; inset:0; display:grid; place-items:center; pointer-events:none; font-size:42px; opacity:0; transform:scale(.7);
+  }
+  .fx.show{animation:pop .6s ease}
+  @keyframes pop{0%{opacity:0; transform:scale(.7)}20%{opacity:1; transform:scale(1)}80%{opacity:1}100%{opacity:0; transform:scale(1.1)}}
+
+  /* Bars */
+  .bars{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:12px 2px 8px}
+  .bar{background:#0d1226; border:1px solid rgba(255,255,255,.06); border-radius:10px; padding:8px}
+  .bar label{display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:12px; opacity:.85; margin-bottom:6px}
+  .meter{height:8px; background:#070b19; border-radius:6px; overflow:hidden}
+  .meter > i{display:block; height:100%; width:50%; background:linear-gradient(90deg, #2bdfff, #6ae3ff)}
+  .meter.good > i{background:linear-gradient(90deg, var(--good), #7cf28a)}
+  .meter.warn > i{background:linear-gradient(90deg, var(--warn), #ffd666)}
+  .meter.bad  > i{background:linear-gradient(90deg, var(--bad),  #ff8082)}
+
+  /* Buttons */
+  .actions{display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin-top:10px}
+  button{
+    appearance:none; border:none; background:#0f1736; color:var(--text); padding:10px 8px; border-radius:10px; cursor:pointer;
+    border:1px solid rgba(255,255,255,.08); font-weight:600; font-size:13px; transition:transform .08s ease, background .2s ease, opacity .2s ease;
+  }
+  button:hover{transform:translateY(-1px)}
+  button:active{transform:translateY(0)}
+  button[disabled]{opacity:.45; cursor:not-allowed}
+  .foot{display:flex; align-items:center; justify-content:space-between; margin-top:10px; font-size:12px; opacity:.8}
+  .reset{opacity:.7}
+  .toast{
+    position:fixed; left:50%; bottom:20px; transform:translateX(-50%); background:#0f1736; border:1px solid rgba(255,255,255,.1); border-radius:12px;
+    padding:10px 14px; font-size:13px; opacity:0; pointer-events:none;
+  }
+  .toast.show{animation:toast .9s ease}
+  @keyframes toast{0%{opacity:0; transform:translate(-50%, 8px)}12%{opacity:1; transform:translate(-50%, 0)}80%{opacity:1}100%{opacity:0; transform:translate(-50%, -6px)}}
+
+  /* Responsive tweaks */
+  @media (max-width:380px){ .actions{grid-template-columns:repeat(3,1fr)} }
+</style>
+</head>
+<body>
+  <div class="game" id="game">
+    <div class="top">
+      <div class="title">🐾 Bitzee</div>
+      <div class="clock" id="clock">--:--</div>
+    </div>
+
+    <div class="viewport" id="viewport">
+      <!-- Pet face (eyes/mouth change by JS via data-attrs) -->
+      <svg class="pet happy" id="pet" viewBox="0 0 200 180" xmlns="http://www.w3.org/2000/svg" aria-label="Bitzee pet">
+        <!-- body -->
+        <defs>
+          <linearGradient id="g1" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%"  stop-color="#6ae3ff"/>
+            <stop offset="100%" stop-color="#2bdfff"/>
+          </linearGradient>
+        </defs>
+        <ellipse cx="100" cy="95" rx="80" ry="70" fill="url(#g1)"/>
+        <!-- ears -->
+        <ellipse cx="52" cy="28" rx="18" ry="22" fill="#66d6ff"/>
+        <ellipse cx="148" cy="28" rx="18" ry="22" fill="#66d6ff"/>
+        <!-- belly shine -->
+        <ellipse cx="78" cy="70" rx="16" ry="10" fill="rgba(255,255,255,.45)"/>
+        <!-- eyes -->
+        <circle id="eyeL" cx="70" cy="90" r="10" fill="#071223"/>
+        <circle id="eyeR" cx="130" cy="90" r="10" fill="#071223"/>
+        <circle id="blinkL" cx="70" cy="90" r="10" fill="#071223" opacity="0"/>
+        <circle id="blinkR" cx="130" cy="90" r="10" fill="#071223" opacity="0"/>
+        <!-- mouth -->
+        <path id="mouth" d="M80 115 Q100 130 120 115" stroke="#071223" stroke-width="6" fill="none" stroke-linecap="round"/>
+        <!-- cheeks -->
+        <circle cx="55" cy="110" r="6" fill="rgba(255,105,180,.55)"/>
+        <circle cx="145" cy="110" r="6" fill="rgba(255,105,180,.55)"/>
+      </svg>
+
+      <!-- effect emojis -->
+      <div class="fx" id="fx">🍔</div>
+      <div class="bubble" id="bubble">I’m feeling great!</div>
+    </div>
+
+    <div class="bars">
+      <div class="bar">
+        <label><span>Hunger</span><b id="hungerText">100</b></label>
+        <div class="meter" id="hungerMeter"><i></i></div>
+      </div>
+      <div class="bar">
+        <label><span>Fun</span><b id="funText">100</b></label>
+        <div class="meter" id="funMeter"><i></i></div>
+      </div>
+      <div class="bar">
+        <label><span>Energy</span><b id="energyText">100</b></label>
+        <div class="meter" id="energyMeter"><i></i></div>
+      </div>
+      <div class="bar">
+        <label><span>Hygiene</span><b id="hygieneText">100</b></label>
+        <div class="meter" id="hygieneMeter"><i></i></div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button id="btnFeed"   title="Feed">🍔 Feed</button>
+      <button id="btnPlay"   title="Play">🎲 Play</button>
+      <button id="btnClean"  title="Clean">🧼 Clean</button>
+      <button id="btnSleep"  title="Sleep">😴 Sleep</button>
+      <button id="btnHeal"   title="Heal">💊 Heal</button>
+    </div>
+
+    <div class="foot">
+      <span>Age: <b id="age">0d</b> • Mood: <b id="mood">Happy</b></span>
+      <button class="reset" id="btnReset" title="Start over">Reset</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast">Saved</div>
+
+<script>
+(function(){
+  const EL = s => document.getElementById(s);
+
+  const state = load() || {
+    hunger: 80, fun: 80, energy: 80, hygiene: 80,
+    ageMinutes: 0, sleeping: false, sick: false, last: Date.now()
+  };
+
+  const TICK_MS = 1000;         // one second per tick
+  const DECAY = {               // how fast stats drop per minute (approx)
+    hunger: 4, fun: 3, energy: 2, hygiene: 2
+  };
+  const FX = EL('fx');
+  const bubble = EL('bubble');
+  const pet = EL('pet');
+  const mouth = EL('mouth');
+  const blinkL = EL('blinkL'), blinkR = EL('blinkR');
+  const meters = {
+    hunger: EL('hungerMeter'),
+    fun: EL('funMeter'),
+    energy: EL('energyMeter'),
+    hygiene: EL('hygieneMeter')
+  };
+  const texts = {
+    hunger: EL('hungerText'),
+    fun: EL('funText'),
+    energy: EL('energyText'),
+    hygiene: EL('hygieneText')
+  };
+
+  // Wire buttons
+  EL('btnFeed').onclick  = () => act('feed');
+  EL('btnPlay').onclick  = () => act('play');
+  EL('btnClean').onclick = () => act('clean');
+  EL('btnSleep').onclick = () => act('sleep');
+  EL('btnHeal').onclick  = () => act('heal');
+  EL('btnReset').onclick = () => { localStorage.removeItem('bitzee'); location.reload(); };
+
+  // Clock
+  setInterval(()=> EL('clock').textContent = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}), 1000);
+
+  // Main loop
+  let loop = setInterval(tick, TICK_MS);
+  // Catch-up decay if the tab was closed
+  catchUp();
+
+  function tick(){
+    const now = Date.now();
+    const dt = (now - (state.last || now)) / 60000; // minutes
+    state.last = now;
+
+    // Stat decay
+    const mult = state.sleeping ? 0.3 : 1;
+    state.hunger = clamp(state.hunger - DECAY.hunger*dt*mult, 0, 100);
+    state.fun    = clamp(state.fun    - DECAY.fun*dt*(state.sleeping?0.15:1), 0, 100);
+    state.hygiene= clamp(state.hygiene- DECAY.hygiene*dt, 0, 100);
+    state.energy = clamp(state.energy + (state.sleeping? +18*dt : -DECAY.energy*dt), 0, 100);
+
+    // Random “mess” event when hygiene low
+    if(Math.random() < 0.005 && state.hygiene < 45){
+      toast("Uh-oh, a little mess appeared. Clean up! 🧹");
+      state.hygiene = clamp(state.hygiene - 8, 0, 100);
+    }
+
+    // Sickness if stats very low
+    state.sick = (state.hunger < 20 || state.hygiene < 20 || state.energy < 10);
+
+    // Aging
+    state.ageMinutes += dt;
+
+    // Mood & visuals
+    updateUI();
+
+    // Save occasionally
+    if(Math.random() < 0.2) save();
+  }
+
+  function act(type){
+    switch(type){
+      case 'feed':
+        bump('hunger', +28); bump('energy', +6); showFx('🍔'); say("Yum! Thank you!");
+        break;
+      case 'play':
+        if(state.sleeping){ say("Zzz... maybe later."); wobble(); break; }
+        bump('fun', +24); bump('energy', -10); showFx('🎉'); say("Weeee! That was fun!");
+        break;
+      case 'clean':
+        bump('hygiene', +30); showFx('🫧'); say("So fresh and so clean!");
+        break;
+      case 'sleep':
+        state.sleeping = !state.sleeping;
+        say(state.sleeping ? "Goodnight… 😴" : "I’m up! 🌞");
+        pet.classList.toggle('happy', !state.sleeping);
+        break;
+      case 'heal':
+        if(state.sick){
+          bump('hunger', +10); bump('hygiene', +10); bump('energy', +10);
+          state.sick = false; showFx('💊'); say("Feeling better already!");
+        } else { say("I’m okay!"); wobble(); }
+        break;
+    }
+    save();
+    updateUI();
+  }
+
+  function bump(key, delta){ state[key] = clamp(state[key] + delta, 0, 100); }
+  function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
+
+  function updateUI(){
+    // Bars
+    ['hunger','fun','energy','hygiene'].forEach(k=>{
+      const v = Math.round(state[k]);
+      texts[k].textContent = v;
+      const i = meters[k].querySelector('i');
+      i.style.width = v + '%';
+      meters[k].classList.remove('good','warn','bad');
+      meters[k].classList.add(v>=66?'good':v>=33?'warn':'bad');
+    });
+
+    // Mood
+    const avg = (state.hunger + state.fun + state.energy + state.hygiene)/4;
+    let mood = 'Happy', msg = "I’m feeling great!";
+    if(state.sleeping){ mood = 'Sleeping'; msg = "Zzz…"; }
+    else if(state.sick){ mood = 'Sick'; msg = "I don’t feel good."; }
+    else if(avg < 33){ mood = 'Sad'; msg = "Can we fix my needs?"; }
+    else if(avg < 66){ mood = 'Okay'; msg = "Doing alright."; }
+
+    EL('mood').textContent = mood;
+    bubble.textContent = msg;
+
+    // Pet expression
+    mouth.setAttribute('d',
+      mood==='Happy' ? "M80 115 Q100 130 120 115" :
+      mood==='Sad'   ? "M80 125 Q100 112 120 125" :
+      mood==='Sick'  ? "M80 118 Q100 118 120 118" :
+      "M80 120 Q100 125 120 120"
+    );
+    pet.classList.toggle('happy', mood==='Happy' && !state.sleeping);
+    pet.classList.toggle('sad',   mood==='Sad' || state.sick);
+
+    // Blink randomly
+    if(Math.random()<0.05 && !state.sleeping) blink();
+
+    // Disable some actions while sleeping
+    ['btnFeed','btnPlay','btnClean','btnHeal'].forEach(id=>{
+      EL(id).disabled = state.sleeping && id==='btnPlay';
+    });
+
+    // Age
+    const mins = Math.floor(state.ageMinutes);
+    const d = Math.floor(mins/ (60*24));
+    const h = Math.floor(mins/60) % 24;
+    EL('age').textContent = `${d}d ${h}h`;
+  }
+
+  function say(text){
+    bubble.textContent = text;
+    bubble.style.opacity = .95;
+    clearTimeout(say._t);
+    say._t = setTimeout(updateUI, 1800);
+  }
+
+  function showFx(symbol){
+    FX.textContent = symbol;
+    FX.classList.remove('show'); void FX.offsetWidth; // restart animation
+    FX.classList.add('show');
+  }
+
+  function wobble(){
+    pet.style.transform = 'rotate(-4deg)'; setTimeout(()=> pet.style.transform = 'rotate(0)', 120);
+  }
+
+  function blink(){
+    blinkL.setAttribute('opacity','1'); blinkR.setAttribute('opacity','1');
+    setTimeout(()=>{ blinkL.setAttribute('opacity','0'); blinkR.setAttribute('opacity','0'); }, 120);
+  }
+
+  function save(){
+    localStorage.setItem('bitzee', JSON.stringify(state));
+    // show a subtle save toast only occasionally
+    if(Math.random()<0.08) toast('Progress saved');
+  }
+
+  function load(){
+    const raw = localStorage.getItem('bitzee');
+    if(!raw) return null;
+    try{ return JSON.parse(raw); }catch{ return null; }
+  }
+
+  function catchUp(){
+    // When returning after a while, decay based on elapsed time
+    const now = Date.now();
+    const last = state.last || now;
+    const minutesAway = (now - last)/60000;
+    if(minutesAway > 0.2){
+      ['hunger','fun','energy','hygiene'].forEach(k=>{
+        state[k] = clamp(state[k] - DECAY[k]*(minutesAway/1), 0, 100);
+      });
+      state.ageMinutes += minutesAway;
+    }
+    state.last = now;
+    updateUI();
+  }
+
+  function toast(msg){
+    const el = EL('toast');
+    el.textContent = msg;
+    el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+    clearTimeout(toast._t); toast._t = setTimeout(()=> el.classList.remove('show'), 900);
+  }
+})();
+</script>
+</body>
+</html>

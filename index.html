@@ -40,11 +40,13 @@
   }
   .pet{
     position:absolute; inset:auto 0 12% 0; margin:auto; width:44%; min-width:160px; pointer-events:none;
-    transition:transform .15s ease; image-rendering:pixelated;
+    transition:transform .15s ease; image-rendering:pixelated; transform-origin:50% 50%;
   }
   .pet.happy{animation:bob 1.6s ease-in-out infinite}
   .pet.sad{filter:saturate(.7)}
+  .pet.spin{animation:spin .6s linear}
   @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+  @keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
 
   .bubble{
     position:absolute; left:10px; bottom:10px; padding:8px 10px; background:#101429; border:1px solid rgba(255,255,255,.08);
@@ -266,6 +268,7 @@
   const fxArea = EL('fxArea');
   const bubble = EL('bubble');
   const pet = EL('pet');
+  const viewport = EL('viewport');
   const mouth = EL('mouth');
   const blinkL = EL('blinkL'), blinkR = EL('blinkR');
 
@@ -331,6 +334,30 @@
   colorPicker.value = state.color;
   setCatColor(state.color);
   colorPicker.oninput = () => { state.color = colorPicker.value; setCatColor(state.color); save(); };
+
+  // Pull-to-refresh spin on the main character
+  let pullStartY = null, pulled = false;
+  viewport.addEventListener('pointerdown', e => {
+    pullStartY = e.clientY; pulled = false;
+  });
+  viewport.addEventListener('pointermove', e => {
+    if(pullStartY === null) return;
+    if(e.clientY - pullStartY > 50) pulled = true;
+  });
+  function spinPet(){
+    const wasHappy = pet.classList.contains('happy');
+    pet.classList.remove('happy');
+    pet.classList.add('spin');
+    pet.addEventListener('animationend', () => {
+      pet.classList.remove('spin');
+      if(wasHappy) pet.classList.add('happy');
+    }, {once:true});
+  }
+  viewport.addEventListener('pointerup', () => {
+    if(pulled) spinPet();
+    pullStartY = null; pulled = false;
+  });
+  viewport.addEventListener('pointercancel', () => { pullStartY = null; pulled = false; });
 
   // Buttons
   EL('btnFeed').onclick  = () => act('feed');

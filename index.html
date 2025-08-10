@@ -8,9 +8,10 @@
 <link rel="apple-touch-icon" href="cat-icon.svg">
 <title>Catzee</title>
 <style>
-  :root{
-    --bg:#0f1220; --panel:#1b2038; --accent:#6ae3ff; --good:#4cd964; --warn:#ffcc00; --bad:#ff4d4f; --text:#e9f1ff;
-  }
+    :root{
+      --bg:#0f1220; --panel:#1b2038; --accent:#6ae3ff; --good:#4cd964; --warn:#ffcc00; --bad:#ff4d4f; --text:#e9f1ff;
+      --cat1:#6ae3ff; --cat2:#2bdfff; --catInner:#66d6ff;
+    }
   *{box-sizing:border-box}
   html,body{height:100%}
   body{
@@ -112,11 +113,16 @@
   .foot{display:flex; align-items:center; justify-content:space-between; margin-top:10px; font-size:12px; opacity:.9; gap:8px}
   .left{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
   .reset{opacity:.7}
-  .sound{
-    display:inline-flex; align-items:center; gap:6px; background:#0f1736; border:1px solid rgba(255,255,255,.1);
-    border-radius:20px; padding:6px 10px; font-size:12px;
-  }
-  .sound input{accent-color:#6ae3ff}
+    .sound{
+      display:inline-flex; align-items:center; gap:6px; background:#0f1736; border:1px solid rgba(255,255,255,.1);
+      border-radius:20px; padding:6px 10px; font-size:12px;
+    }
+    .sound input{accent-color:var(--cat1)}
+    .color{
+      display:inline-flex; align-items:center; gap:6px; background:#0f1736; border:1px solid rgba(255,255,255,.1);
+      border-radius:20px; padding:6px 10px; font-size:12px;
+    }
+    .color input{background:transparent; border:none; width:18px; height:18px; cursor:pointer; padding:0;}
   .toast{
     position:fixed; left:50%; bottom:20px; transform:translateX(-50%); background:#0f1736; border:1px solid rgba(255,255,255,.1); border-radius:12px;
     padding:10px 14px; font-size:13px; opacity:0; pointer-events:none;
@@ -136,17 +142,17 @@
 
     <div class="viewport" id="viewport">
       <svg class="pet happy" id="pet" viewBox="0 0 200 180" xmlns="http://www.w3.org/2000/svg" aria-label="Catzee cat">
-        <defs>
-          <linearGradient id="g1" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%"  stop-color="#6ae3ff"/>
-            <stop offset="100%" stop-color="#2bdfff"/>
-          </linearGradient>
-        </defs>
-        <ellipse cx="100" cy="95" rx="80" ry="70" fill="url(#g1)"/>
-        <polygon points="40,80 80,20 100,80" fill="url(#g1)"/>
-        <polygon points="160,80 120,20 100,80" fill="url(#g1)"/>
-        <polygon points="52,80 80,35 96,78" fill="#66d6ff"/>
-        <polygon points="148,80 120,35 104,78" fill="#66d6ff"/>
+          <defs>
+            <linearGradient id="g1" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%"  stop-color="var(--cat1)"/>
+              <stop offset="100%" stop-color="var(--cat2)"/>
+            </linearGradient>
+          </defs>
+          <ellipse cx="100" cy="95" rx="80" ry="70" fill="url(#g1)"/>
+          <polygon points="36,80 80,10 100,80" fill="url(#g1)"/>
+          <polygon points="164,80 120,10 100,80" fill="url(#g1)"/>
+          <polygon points="48,78 80,25 100,78" fill="var(--catInner)"/>
+          <polygon points="152,78 120,25 100,78" fill="var(--catInner)"/>
         <ellipse cx="78" cy="70" rx="16" ry="10" fill="rgba(255,255,255,.45)"/>
         <circle id="eyeL" cx="70" cy="90" r="10" fill="#071223"/>
         <circle id="eyeR" cx="130" cy="90" r="10" fill="#071223"/>
@@ -200,6 +206,9 @@
           <input type="checkbox" id="soundToggle" checked />
           <span>Sound</span>
         </label>
+        <label class="color" title="Choose color">
+          🎨 <input type="color" id="colorPicker" />
+        </label>
       </div>
       <button class="reset" id="btnReset" title="Start over">Reset</button>
     </div>
@@ -211,11 +220,12 @@
 (function(){
   const EL = s => document.getElementById(s);
 
-  const state = load() || {
+  const defaults = {
     hunger: 80, fun: 80, energy: 80, hygiene: 80,
     ageMinutes: 0, sleeping: false, sick: false, last: Date.now(),
-    sound: true
+    sound: true, color: '#6ae3ff'
   };
+  const state = Object.assign({}, defaults, load() || {});
 
   const TICK_MS = 1000;
   const DECAY = { hunger: 4, fun: 3, energy: 2, hygiene: 2 };
@@ -238,6 +248,26 @@
     energy: EL('energyText'),
     hygiene: EL('hygieneText')
   };
+
+  const colorPicker = EL('colorPicker');
+
+  function shadeColor(color, percent){
+    let f = parseInt(color.slice(1),16), t = percent < 0 ? 0 : 255, p = Math.abs(percent);
+    let R = f >> 16, G = f >> 8 & 0x00FF, B = f & 0x0000FF;
+    return '#' + (0x1000000 + (Math.round((t - R) * p) + R) * 0x10000 +
+                  (Math.round((t - G) * p) + G) * 0x100 +
+                  (Math.round((t - B) * p) + B)).toString(16).slice(1);
+  }
+
+  function setCatColor(hex){
+    document.documentElement.style.setProperty('--cat1', shadeColor(hex, 0.15));
+    document.documentElement.style.setProperty('--cat2', shadeColor(hex,-0.15));
+    document.documentElement.style.setProperty('--catInner', shadeColor(hex, 0.05));
+  }
+
+  colorPicker.value = state.color;
+  setCatColor(state.color);
+  colorPicker.oninput = () => { state.color = colorPicker.value; setCatColor(state.color); save(); };
 
   // Buttons
   EL('btnFeed').onclick  = () => act('feed');
@@ -350,6 +380,7 @@
     }
     save();
     updateUI();
+    if(['feed','play','clean','heal'].includes(type)) animateMouth();
   }
 
   function bump(key, delta, pulseId){
@@ -416,6 +447,11 @@
   function blink(){
     blinkL.setAttribute('opacity','1'); blinkR.setAttribute('opacity','1');
     setTimeout(()=>{ blinkL.setAttribute('opacity','0'); blinkR.setAttribute('opacity','0'); }, 120);
+  }
+
+  function animateMouth(){
+    mouth.setAttribute('d',"M80 115 Q100 145 120 115");
+    setTimeout(updateUI,200);
   }
 
   /* ---------- Particles / animations ---------- */

@@ -19,6 +19,12 @@
     color:var(--text); background:radial-gradient(1200px 800px at 20% 10%, #1a1f35 0, #0f1220 45%, #0b0e19 100%);
     display:flex; align-items:center; justify-content:center; padding:16px;
   }
+  body.boy{
+    background:radial-gradient(1200px 800px at 20% 10%, #1a1f35 0, #0f1220 45%, #0b0e19 100%);
+  }
+  body.girl{
+    background:radial-gradient(1200px 800px at 20% 10%, #351a35 0, #200f14 45%, #190b20 100%);
+  }
   .game{
     width:min(440px, 94vw); background:var(--panel); border-radius:16px; padding:14px; box-shadow:0 12px 40px rgba(0,0,0,.4);
     border:1px solid rgba(255,255,255,.06);
@@ -118,6 +124,21 @@
       border-radius:20px; padding:6px 10px; font-size:12px;
     }
     .sound input{accent-color:var(--cat1)}
+
+  /* Setup screen */
+  .setup{
+    position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+    background:rgba(0,0,0,.8); z-index:100;
+  }
+  .setup-card{
+    background:var(--panel); padding:20px; border-radius:12px; width:90%; max-width:300px;
+    text-align:center; border:1px solid rgba(255,255,255,.1);
+  }
+  .setup-card input[type="text"]{
+    width:100%; padding:8px; border-radius:8px; border:none; margin:8px 0;
+  }
+  .setup-card .gender{display:flex; gap:12px; justify-content:center; margin:8px 0;}
+  .setup-card .gender label{display:flex; gap:4px; align-items:center; cursor:pointer;}
     .color{
       display:inline-flex; align-items:center; gap:6px; background:#0f1736; border:1px solid rgba(255,255,255,.1);
       border-radius:20px; padding:6px 10px; font-size:12px;
@@ -134,9 +155,20 @@
 </style>
 </head>
 <body>
+  <div class="setup" id="setup">
+    <div class="setup-card">
+      <h2>Welcome!</h2>
+      <input type="text" id="setupName" placeholder="Your name" />
+      <div class="gender">
+        <label><input type="radio" name="gender" value="boy"> Boy</label>
+        <label><input type="radio" name="gender" value="girl"> Girl</label>
+      </div>
+      <button id="setupGo">Start</button>
+    </div>
+  </div>
   <div class="game" id="game">
     <div class="top">
-      <div class="title">🐱 Catzee</div>
+      <div class="title" id="petName">🐱 Catzee</div>
       <div class="clock" id="clock">--:--</div>
     </div>
 
@@ -223,7 +255,8 @@
   const defaults = {
     hunger: 80, fun: 80, energy: 80, hygiene: 80,
     ageMinutes: 0, sleeping: false, sick: false, last: Date.now(),
-    sound: true, color: '#6ae3ff'
+    sound: true, color: '#6ae3ff',
+    gender: null, name: ''
   };
   const state = Object.assign({}, defaults, load() || {});
 
@@ -251,6 +284,10 @@
 
   const colorPicker = EL('colorPicker');
   const themeMeta   = document.querySelector('meta[name="theme-color"]');
+  const petNameEl   = EL('petName');
+  const setup       = EL('setup');
+  const setupName   = EL('setupName');
+  const setupGo     = EL('setupGo');
 
   function shadeColor(color, percent){
     let f = parseInt(color.slice(1),16), t = percent < 0 ? 0 : 255, p = Math.abs(percent);
@@ -267,6 +304,29 @@
     document.documentElement.style.setProperty('--accent', hex);
     if(themeMeta) themeMeta.setAttribute('content', shadeColor(hex, 0.15));
   }
+
+  function applyGender(){
+    document.body.classList.remove('boy','girl');
+    document.body.classList.add(state.gender || 'boy');
+  }
+
+  applyGender();
+  petNameEl.textContent = state.name || '🐱 Catzee';
+  if(!state.gender || !state.name){
+    setup.style.display = 'flex';
+  }
+
+  setupGo.onclick = () => {
+    const genderEl = document.querySelector('input[name="gender"]:checked');
+    const name = setupName.value.trim();
+    if(!genderEl || !name) return;
+    state.gender = genderEl.value;
+    state.name = name;
+    save();
+    applyGender();
+    petNameEl.textContent = state.name;
+    setup.style.display = 'none';
+  };
 
   colorPicker.value = state.color;
   setCatColor(state.color);

@@ -1,0 +1,15 @@
+{
+  "name": "Catzee",
+  "short_name": "Catzee",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0f1220",
+  "theme_color": "#6ae3ff",
+  "icons": [
+    {
+      "src": "cat-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

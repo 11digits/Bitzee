@@ -1,2 +1,2 @@
-# Bitzee
-Bitzee game
+# Catzee
+Catzee game

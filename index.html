@@ -3,7 +3,10 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Bitzee — animated + sounds</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#6ae3ff">
+<link rel="apple-touch-icon" href="cat-icon.svg">
+<title>Catzee</title>
 <style>
   :root{
     --bg:#0f1220; --panel:#1b2038; --accent:#6ae3ff; --good:#4cd964; --warn:#ffcc00; --bad:#ff4d4f; --text:#e9f1ff;
@@ -127,12 +130,12 @@
 <body>
   <div class="game" id="game">
     <div class="top">
-      <div class="title">🐾 Bitzee</div>
+      <div class="title">🐱 Catzee</div>
       <div class="clock" id="clock">--:--</div>
     </div>
 
     <div class="viewport" id="viewport">
-      <svg class="pet happy" id="pet" viewBox="0 0 200 180" xmlns="http://www.w3.org/2000/svg" aria-label="Bitzee pet">
+      <svg class="pet happy" id="pet" viewBox="0 0 200 180" xmlns="http://www.w3.org/2000/svg" aria-label="Catzee cat">
         <defs>
           <linearGradient id="g1" x1="0" x2="0" y1="0" y2="1">
             <stop offset="0%"  stop-color="#6ae3ff"/>
@@ -140,14 +143,21 @@
           </linearGradient>
         </defs>
         <ellipse cx="100" cy="95" rx="80" ry="70" fill="url(#g1)"/>
-        <ellipse cx="52" cy="28" rx="18" ry="22" fill="#66d6ff"/>
-        <ellipse cx="148" cy="28" rx="18" ry="22" fill="#66d6ff"/>
+        <polygon points="40,80 80,20 100,80" fill="url(#g1)"/>
+        <polygon points="160,80 120,20 100,80" fill="url(#g1)"/>
+        <polygon points="52,80 80,35 96,78" fill="#66d6ff"/>
+        <polygon points="148,80 120,35 104,78" fill="#66d6ff"/>
         <ellipse cx="78" cy="70" rx="16" ry="10" fill="rgba(255,255,255,.45)"/>
         <circle id="eyeL" cx="70" cy="90" r="10" fill="#071223"/>
         <circle id="eyeR" cx="130" cy="90" r="10" fill="#071223"/>
         <circle id="blinkL" cx="70" cy="90" r="10" fill="#071223" opacity="0"/>
         <circle id="blinkR" cx="130" cy="90" r="10" fill="#071223" opacity="0"/>
+        <polygon id="nose" points="100,100 94,110 106,110" fill="#071223"/>
         <path id="mouth" d="M80 115 Q100 130 120 115" stroke="#071223" stroke-width="6" fill="none" stroke-linecap="round"/>
+        <path d="M50 105 H20" stroke="#071223" stroke-width="4" stroke-linecap="round"/>
+        <path d="M50 115 H20" stroke="#071223" stroke-width="4" stroke-linecap="round"/>
+        <path d="M150 105 H180" stroke="#071223" stroke-width="4" stroke-linecap="round"/>
+        <path d="M150 115 H180" stroke="#071223" stroke-width="4" stroke-linecap="round"/>
         <circle cx="55" cy="110" r="6" fill="rgba(255,105,180,.55)"/>
         <circle cx="145" cy="110" r="6" fill="rgba(255,105,180,.55)"/>
       </svg>
@@ -235,7 +245,7 @@
   EL('btnClean').onclick = () => act('clean');
   EL('btnSleep').onclick = () => act('sleep');
   EL('btnHeal').onclick  = () => act('heal');
-  EL('btnReset').onclick = () => { localStorage.removeItem('bitzee'); location.reload(); };
+  EL('btnReset').onclick = () => { localStorage.removeItem('catzee'); location.reload(); };
 
   // Sound toggle
   const soundToggle = EL('soundToggle');
@@ -252,10 +262,13 @@
   /* ---------- WebAudio (tiny synth) ---------- */
   let audioCtx = null;
   function ensureAudio(){
-    if(audioCtx) return;
-    try{ audioCtx = new (window.AudioContext||window.webkitAudioContext)(); }
-    catch(e){ /* ignore */ }
+    try{
+      if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+      if(audioCtx.state === 'suspended') audioCtx.resume();
+    }catch(e){ /* ignore */ }
   }
+  document.addEventListener('mousedown', ensureAudio, {once:true});
+  document.addEventListener('touchstart', ensureAudio, {once:true});
   function beep({freq=440, dur=0.12, type='sine', gain=0.06, slideTo=null, endGain=0.0} = {}){
     if(!state.sound) return;
     ensureAudio(); if(!audioCtx) return;
@@ -473,11 +486,11 @@
 
   /* ---------- Persistence ---------- */
   function save(){
-    localStorage.setItem('bitzee', JSON.stringify(state));
+    localStorage.setItem('catzee', JSON.stringify(state));
     if(Math.random()<0.08) toast('Progress saved');
   }
   function load(){
-    const raw = localStorage.getItem('bitzee'); if(!raw) return null;
+    const raw = localStorage.getItem('catzee'); if(!raw) return null;
     try{ return JSON.parse(raw); }catch{ return null; }
   }
   function catchUp(){
@@ -503,6 +516,9 @@
 
   // Kick off: first user gesture will unlock audio on mobile, but we also try once.
   ensureAudio();
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('sw.js');
+  }
 })();
 </script>
 </body>

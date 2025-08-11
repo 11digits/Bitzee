@@ -32,6 +32,7 @@
     border:1px solid rgba(255,255,255,.06);
   }
   .top{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px}
+  .top-right{display:flex; align-items:center; gap:8px}
   .title{font-weight:700; letter-spacing:.2px}
   .clock{opacity:.8; font-variant-numeric:tabular-nums}
   .stars{text-align:center; margin-bottom:6px; font-size:18px; letter-spacing:2px}
@@ -149,7 +150,7 @@
   .info{position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.8); z-index:120;}
   .info-card{background:var(--panel); padding:20px; border-radius:12px; width:90%; max-width:300px; text-align:left; border:1px solid rgba(255,255,255,.1);}
   .info-card button{margin-top:12px;}
-  .info-btn{position:absolute; top:8px; right:8px; background:none; border:none; color:var(--text); opacity:.8; cursor:pointer; font-size:18px;}
+  .info-btn{background:none; border:none; color:var(--text); opacity:.8; cursor:pointer; font-size:18px;}
     .color{
       display:inline-flex; align-items:center; gap:6px; background:#0f1736; border:1px solid rgba(255,255,255,.1);
       border-radius:20px; padding:6px 10px; font-size:12px;
@@ -186,10 +187,12 @@
   </div>
   <h1 class="app-name">Catzee</h1>
   <div class="game" id="game">
-    <button id="infoBtn" class="info-btn" title="How to play">ℹ️</button>
     <div class="top">
       <div class="title player-name" id="playerName">Player</div>
-      <div class="clock" id="clock">--:--</div>
+      <div class="top-right">
+        <div class="clock" id="clock">--:--</div>
+        <button id="infoBtn" class="info-btn" title="How to play">ℹ️</button>
+      </div>
     </div>
 
     <div class="stars" id="stars">☆☆☆☆☆</div>
@@ -203,15 +206,17 @@
             </linearGradient>
           </defs>
           <ellipse cx="100" cy="95" rx="80" ry="70" fill="url(#g1)"/>
-          <polygon points="36,80 80,10 100,80" fill="url(#g1)"/>
-          <polygon points="164,80 120,10 100,80" fill="url(#g1)"/>
-          <polygon points="48,78 80,25 100,78" fill="var(--catInner)"/>
-          <polygon points="152,78 120,25 100,78" fill="var(--catInner)"/>
+          <polygon points="36,80 80,0 100,80" fill="url(#g1)"/>
+          <polygon points="164,80 120,0 100,80" fill="url(#g1)"/>
+          <polygon points="48,78 80,15 100,78" fill="var(--catInner)"/>
+          <polygon points="152,78 120,15 100,78" fill="var(--catInner)"/>
         <ellipse cx="78" cy="70" rx="16" ry="10" fill="rgba(255,255,255,.45)"/>
         <circle id="eyeL" cx="70" cy="90" r="10" fill="#071223"/>
         <circle id="eyeR" cx="130" cy="90" r="10" fill="#071223"/>
         <circle id="blinkL" cx="70" cy="90" r="10" fill="#071223" opacity="0"/>
         <circle id="blinkR" cx="130" cy="90" r="10" fill="#071223" opacity="0"/>
+        <path id="sleepEyeL" d="M60 90 Q70 80 80 90" stroke="#071223" stroke-width="4" fill="none" opacity="0"/>
+        <path id="sleepEyeR" d="M120 90 Q130 80 140 90" stroke="#071223" stroke-width="4" fill="none" opacity="0"/>
         <polygon id="nose" points="100,100 94,110 106,110" fill="#071223"/>
         <path id="mouth" d="M80 115 Q100 130 120 115" stroke="#071223" stroke-width="6" fill="none" stroke-linecap="round"/>
         <path d="M50 105 H20" stroke="#071223" stroke-width="4" stroke-linecap="round"/>
@@ -291,8 +296,16 @@
   const state = Object.assign({}, defaults, load() || {});
 
   const TICK_MS = 1000;
-  const DECAY = { hunger: 4, fun: 3, energy: 2, hygiene: 2 };
+  const DECAY = { hunger: 5, fun: 4, energy: 3, hygiene: 3 };
   const AGE_MINUTES_PER_LEVEL = 60*24;
+
+  let sleepTimer;
+  function resetSleepTimer(){
+    clearTimeout(sleepTimer);
+    if(!state.sleeping){
+      sleepTimer = setTimeout(()=>{ if(!state.sleeping) act('sleep'); }, 5*60*1000);
+    }
+  }
 
   function getAgeLevel(){
     return Math.min(Math.floor(state.ageMinutes / AGE_MINUTES_PER_LEVEL), 9);
@@ -305,7 +318,9 @@
   const bubble = EL('bubble');
   const pet = EL('pet');
   const mouth = EL('mouth');
+  const eyeL = EL('eyeL'), eyeR = EL('eyeR');
   const blinkL = EL('blinkL'), blinkR = EL('blinkR');
+  const sleepEyeL = EL('sleepEyeL'), sleepEyeR = EL('sleepEyeR');
 
   const meters = {
     hunger: EL('hungerMeter'),
@@ -402,6 +417,8 @@
     const now = Date.now();
     if(now - lastTap < 300) spinPet();
     lastTap = now;
+    bump('energy', -1);
+    resetSleepTimer();
   });
 
   // Buttons
@@ -423,6 +440,7 @@
   // Main loop
   let loop = setInterval(tick, TICK_MS);
   catchUp();
+  resetSleepTimer();
 
   /* ---------- WebAudio (tiny synth) ---------- */
   let audioCtx = null;
@@ -531,6 +549,7 @@
     }
     save();
     updateUI();
+    resetSleepTimer();
     if(['feed','play','clean','heal'].includes(type)) animateMouth();
   }
 
@@ -578,7 +597,13 @@
     pet.classList.toggle('happy', mood==='Happy' && !state.sleeping);
     pet.classList.toggle('sad',   mood==='Sad' || state.sick);
 
+    eyeL.setAttribute('opacity', state.sleeping ? '0' : '1');
+    eyeR.setAttribute('opacity', state.sleeping ? '0' : '1');
+    sleepEyeL.setAttribute('opacity', state.sleeping ? '1' : '0');
+    sleepEyeR.setAttribute('opacity', state.sleeping ? '1' : '0');
+
     if(Math.random()<0.05 && !state.sleeping) blink();
+    if(Math.random()<0.02 && !state.sleeping) wobble();
 
     // Only disable play during sleep
     EL('btnPlay').disabled = state.sleeping;

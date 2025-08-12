@@ -170,6 +170,7 @@
   .toast.show{animation:toast .9s ease}
   @keyframes toast{0%{opacity:0; transform:translate(-50%, 8px)}12%{opacity:1; transform:translate(-50%, 0)}80%{opacity:1}100%{opacity:0; transform:translate(-50%, -6px)}}
 
+  #tunnelGame{position:absolute; inset:0; background:#000; display:none;}
   @media (max-width:380px){ .actions{grid-template-columns:repeat(3,1fr)} }
 </style>
 </head>
@@ -236,6 +237,7 @@
 
       <div class="fx-area" id="fxArea"></div>
       <div class="bubble" id="bubble">I’m feeling great!</div>
+      <canvas id="tunnelGame"></canvas>
     </div>
 
     <div class="bars">
@@ -307,7 +309,8 @@
     ageMinutes: 0, sleeping: false, sick: false, last: Date.now(),
     stars: 0, starStart: Date.now(),
     sound: true, color: '#6ae3ff', bgColor: '',
-    gender: null, name: ''
+    gender: null, name: '',
+    coins: 0
   };
   const state = Object.assign({}, defaults, load() || {});
 
@@ -578,13 +581,10 @@
         sounds.feed();
         break;
       case 'play':
-        if(state.sleeping){ speak("Zzz... maybe later."); wobble(); break; }
-        if(state.energy < 10){ speak("I’m too tired to play."); wobble(); break; }
-        bump('fun', +24, 'bar-fun'); bump('energy', -10);
-        spawnConfetti(); speak("Weeee! That was fun!");
-        happyBounce();
-        sounds.play();
-        break;
+        if(state.sleeping){ speak("Zzz... maybe later."); wobble(); return; }
+        if(state.energy < 10){ speak("I’m too tired to play."); wobble(); return; }
+        startTunnelGame();
+        return;
       case 'clean':
         bump('hygiene', +30, 'bar-hygiene');
         spawnBubbles(); speak("So fresh and so clean!");
@@ -751,6 +751,128 @@
       const x = 40 + Math.random()*20;
       setTimeout(()=>spawn(null,'heart', x, 50+Math.random()*6, ['💖','💗','💓'][i%3]), i*120);
     }
+  }
+
+  /* ---------- Tunnel mini-game ---------- */
+  function startTunnelGame(){
+    speak("Let's play!");
+    sounds.play();
+    const canvas = EL('tunnelGame');
+    const ctx = canvas.getContext('2d');
+    const vp = EL('viewport');
+    canvas.width = vp.clientWidth;
+    canvas.height = vp.clientHeight;
+    canvas.style.display = 'block';
+
+    pet.style.display = 'none';
+    bubble.style.display = 'none';
+    fxArea.style.display = 'none';
+
+    const player = {x:canvas.width/2, y:canvas.height*0.8, r:15};
+    const obstacles = [];
+    const coins = [];
+    let running = true;
+    let collected = 0;
+
+    function move(e){
+      const rect = canvas.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      if(e.touches) e.preventDefault();
+      const x = clientX - rect.left;
+      player.x = clamp(x, player.r, canvas.width-player.r);
+    }
+    canvas.addEventListener('mousemove', move);
+    canvas.addEventListener('touchmove', move);
+
+    const energyTimer = setInterval(()=>{
+      bump('energy', -1);
+      updateUI();
+      if(state.energy <= 0) endGame();
+    }, 1000);
+
+    const spawnTimer = setInterval(()=>{
+      const r = 10 + Math.random()*15;
+      obstacles.push({x:Math.random()*(canvas.width-2*r)+r, y:-r, r, v:2+Math.random()*2});
+    }, 800);
+
+    const coinTimer = setInterval(()=>{
+      const r = 8;
+      coins.push({x:Math.random()*(canvas.width-2*r)+r, y:-r, r, v:2});
+    }, 1200);
+
+    function endGame(){
+      if(!running) return;
+      running = false;
+      clearInterval(spawnTimer);
+      clearInterval(coinTimer);
+      clearInterval(energyTimer);
+      canvas.style.display = 'none';
+      canvas.removeEventListener('mousemove', move);
+      canvas.removeEventListener('touchmove', move);
+      pet.style.display = '';
+      bubble.style.display = '';
+      fxArea.style.display = '';
+      state.coins = (state.coins || 0) + collected;
+      toast(`Collected ${collected} cat coins`);
+      speak("All tired out!");
+      maybeAwardEmote('play');
+      save();
+      updateUI();
+      resetSleepTimer();
+    }
+
+    function draw(){
+      if(!running) return;
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(player.x, player.y, player.r, 0, Math.PI*2);
+      ctx.fill();
+
+      ctx.fillStyle = 'red';
+      for(let i=obstacles.length-1;i>=0;i--){
+        const o = obstacles[i];
+        o.y += o.v;
+        ctx.beginPath();
+        ctx.arc(o.x, o.y, o.r, 0, Math.PI*2);
+        ctx.fill();
+        if(Math.hypot(o.x-player.x, o.y-player.y) < o.r + player.r){
+          obstacles.splice(i,1);
+          bump('energy', -5, 'bar-energy');
+          updateUI();
+          if(state.energy <= 0){ endGame(); return; }
+        } else if(o.y - o.r > canvas.height){
+          obstacles.splice(i,1);
+        }
+      }
+
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = '16px sans-serif';
+      for(let i=coins.length-1;i>=0;i--){
+        const c = coins[i];
+        c.y += c.v;
+        ctx.fillStyle = 'gold';
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, c.r, 0, Math.PI*2);
+        ctx.fill();
+        ctx.fillStyle = '#000';
+        ctx.fillText('🐱', c.x, c.y);
+        if(Math.hypot(c.x-player.x, c.y-player.y) < c.r + player.r){
+          coins.splice(i,1);
+          collected++;
+          bump('fun', +5, 'bar-fun');
+          updateUI();
+        } else if(c.y - c.r > canvas.height){
+          coins.splice(i,1);
+        }
+      }
+
+      requestAnimationFrame(draw);
+    }
+    requestAnimationFrame(draw);
   }
 
   function popFx(symbol){

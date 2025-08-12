@@ -115,6 +115,13 @@
   .pulse{animation:pulse 400ms ease}
   @keyframes pulse{0%{box-shadow:0 0 0 rgba(255,255,255,0)}50%{box-shadow:0 0 0 6px rgba(255,255,255,.08)}100%{box-shadow:0 0 0 rgba(255,255,255,0)}}
 
+  /* Emote communication */
+  .emotes{margin:12px 2px;text-align:center;}
+  .emote-list{display:flex;flex-wrap:wrap;gap:4px;justify-content:center;margin:6px 0;}
+  .emote-list button{background:#0f1736;border:1px solid rgba(255,255,255,.1);border-radius:6px;font-size:24px;padding:4px;cursor:pointer;}
+  .emote-list button.selected{outline:2px solid var(--accent);}
+  .emote-buttons{display:flex;gap:8px;justify-content:center;}
+
   /* Buttons / footer */
   .actions{display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin-top:10px}
   button{
@@ -262,6 +269,15 @@
       <button id="btnHeal"   title="Heal">💊 Heal</button>
     </div>
 
+    <div class="emotes">
+      <div class="emote-info">Emotes <span id="emoteCount"></span> • <span id="emoteLevel"></span></div>
+      <div id="emoteList" class="emote-list"></div>
+      <div class="emote-buttons">
+        <button id="btnSendEmote" title="Send selected emoji">📤 Send</button>
+        <button id="btnReceiveEmote" title="Listen for emoji">📥 Receive</button>
+      </div>
+    </div>
+
     <div class="foot">
       <div class="left">
         <span>Age: <b id="age">0d</b> • Mood: <b id="mood">Happy</b></span>
@@ -295,6 +311,25 @@
   };
   const state = Object.assign({}, defaults, load() || {});
 
+  const EMOTE_SET = ['😀','😃','😄','😁','😆','😅','😂','🤣','😊','😇','🙂','🙃','😉','😌','😍','🥰','😘','😗','😙','😚','😋','😛','😝','😜','🤪','🤨','🧐','🤓','😎','🥳','😤','😠','😡','🤬','😢','😭','😱','😨','😰','😥','😓','🤗','🤔','🤭','🤫','🤥','😶','😏','😒','🙄','😬','🤢','🤮','🥴','😵','🤯','😳','🥺','😦','😧','😮','😯','😲','🤠','🥱','😴','🤤','😪','😷','🤒','🤕','🤑','😈','👿','👻','💀','🤖','🎃'];
+  const EMOTE_CAPACITY = [25,50,75];
+  const BASE_FREQ = 1000, STEP_FREQ = 40;
+
+  if(!state.emotes || !state.emotes.length){
+    state.emotes = pickRandomEmotes(5);
+  }
+  state.emoteLevel = state.emoteLevel || 1;
+
+  function pickRandomEmotes(n){
+    const pool = [...EMOTE_SET];
+    const res = [];
+    for(let i=0;i<n && pool.length;i++){
+      const idx = Math.floor(Math.random()*pool.length);
+      res.push(pool.splice(idx,1)[0]);
+    }
+    return res;
+  }
+
   const TICK_MS = 1000;
   const DECAY = { hunger: 5, fun: 4, energy: 3, hygiene: 3 };
   const AGE_MINUTES_PER_LEVEL = 60*24;
@@ -321,6 +356,13 @@
   const eyeL = EL('eyeL'), eyeR = EL('eyeR');
   const blinkL = EL('blinkL'), blinkR = EL('blinkR');
   const sleepEyeL = EL('sleepEyeL'), sleepEyeR = EL('sleepEyeR');
+
+  const emoteListEl = EL('emoteList');
+  const emoteCountEl = EL('emoteCount');
+  const emoteLevelEl = EL('emoteLevel');
+  const btnSendEmote = EL('btnSendEmote');
+  const btnReceiveEmote = EL('btnReceiveEmote');
+  let selectedEmote = null;
 
   const meters = {
     hunger: EL('hungerMeter'),
@@ -428,6 +470,15 @@
   EL('btnSleep').onclick = () => act('sleep');
   EL('btnHeal').onclick  = () => act('heal');
   EL('btnReset').onclick = () => { localStorage.removeItem('catzee'); location.reload(); };
+  btnSendEmote.onclick = () => { if(selectedEmote) sendEmote(selectedEmote); };
+  btnReceiveEmote.onclick = () => listenForEmote();
+  emoteListEl.addEventListener('click', e => {
+    if(e.target.tagName === 'BUTTON'){
+      selectedEmote = e.target.textContent;
+      [...emoteListEl.children].forEach(c=>c.classList.remove('selected'));
+      e.target.classList.add('selected');
+    }
+  });
 
   // Sound toggle
   const soundToggle = EL('soundToggle');
@@ -554,6 +605,7 @@
         } else { speak("I’m okay!"); wobble(); }
         break;
     }
+    maybeAwardEmote(type);
     save();
     updateUI();
     resetSleepTimer();
@@ -619,6 +671,7 @@
     const d = Math.floor(mins/ (60*24));
     const h = Math.floor(mins/60) % 24;
     EL('age').textContent = `${d}d ${h}h`;
+    updateEmoteUI();
   }
 
   function speak(text){
@@ -707,6 +760,100 @@
     d.style.left = '50%'; d.style.top = '45%'; d.style.transform = 'translate(-50%,-50%) scale(.7)';
     fxArea.appendChild(d);
     setTimeout(()=>d.remove(), 650);
+  }
+
+  /* ---------- Emote system ---------- */
+  function updateEmoteUI(){
+    emoteListEl.innerHTML = '';
+    state.emotes.forEach(e => {
+      const b = document.createElement('button');
+      b.textContent = e;
+      emoteListEl.appendChild(b);
+    });
+    emoteCountEl.textContent = `${state.emotes.length}/${EMOTE_CAPACITY[state.emoteLevel-1]}`;
+    emoteLevelEl.textContent = `Lvl ${state.emoteLevel}`;
+  }
+
+  function maybeAwardEmote(action){
+    if(action !== 'play') return;
+    if(state.emotes.length >= EMOTE_CAPACITY[state.emoteLevel-1]) return;
+    if(Math.random() < 0.3){
+      awardRandomEmote();
+    }
+  }
+
+  function awardRandomEmote(){
+    const available = EMOTE_SET.filter(e => !state.emotes.includes(e));
+    if(!available.length) return;
+    const em = available[Math.floor(Math.random()*available.length)];
+    state.emotes.push(em);
+    maybeLevelUp();
+    updateEmoteUI();
+    popFx(em);
+    toast(`New emote ${em}!`);
+    save();
+  }
+
+  function maybeLevelUp(){
+    if(state.emoteLevel < 3 && state.emotes.length >= EMOTE_CAPACITY[state.emoteLevel-1]){
+      state.emoteLevel++;
+      toast('Emote level up!');
+    }
+  }
+
+  function sendEmote(em){
+    ensureAudio(); if(!audioCtx) return;
+    const idx = EMOTE_SET.indexOf(em);
+    if(idx === -1) return;
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.frequency.value = BASE_FREQ + idx*STEP_FREQ;
+    g.gain.value = 0.2;
+    osc.connect(g).connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.3);
+    toast(`Sent ${em}`);
+  }
+
+  async function listenForEmote(){
+    ensureAudio(); if(!audioCtx) return;
+    let stream;
+    try{
+      stream = await navigator.mediaDevices.getUserMedia({audio:true});
+    }catch(e){ toast('Mic denied'); return; }
+    const src = audioCtx.createMediaStreamSource(stream);
+    const analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 2048;
+    src.connect(analyser);
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    function detect(){
+      analyser.getByteFrequencyData(data);
+      let max=0, idx=0;
+      for(let i=0;i<data.length;i++){ if(data[i] > max){ max=data[i]; idx=i; } }
+      const freq = idx*audioCtx.sampleRate/analyser.fftSize;
+      const emIdx = Math.round((freq-BASE_FREQ)/STEP_FREQ);
+      if(emIdx>=0 && emIdx<EMOTE_SET.length){
+        stream.getTracks().forEach(t=>t.stop());
+        gotEmote(emIdx);
+      } else {
+        requestAnimationFrame(detect);
+      }
+    }
+    detect();
+  }
+
+  function gotEmote(idx){
+    const em = EMOTE_SET[idx];
+    if(!state.emotes.includes(em)){
+      state.emotes.push(em);
+      maybeLevelUp();
+      updateEmoteUI();
+      popFx(em);
+      toast(`Received ${em}`);
+      save();
+    } else {
+      toast(`Already have ${em}`);
+    }
   }
 
   /* ---------- Persistence ---------- */

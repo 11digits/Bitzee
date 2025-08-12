@@ -58,6 +58,19 @@
     border-radius:10px; font-size:13px; opacity:.95;
   }
 
+  .exit-game{
+    position:absolute; top:8px; right:8px; display:none; z-index:10;
+    background:#0f1736; border:1px solid rgba(255,255,255,.1); border-radius:6px;
+    padding:4px 6px; font-size:12px; cursor:pointer;
+  }
+
+  .chevron{
+    position:absolute; top:50%; transform:translateY(-50%); font-size:32px; opacity:.5;
+    display:none; pointer-events:none; z-index:9;
+  }
+  .chevron-left{left:8px;}
+  .chevron-right{right:8px;}
+
   /* Effects container */
   .fx-area{position:absolute; inset:0; pointer-events:none; overflow:hidden}
   .fx-emoji{
@@ -123,7 +136,7 @@
   .emote-buttons{display:flex;gap:8px;justify-content:center;}
 
   /* Buttons / footer */
-  .actions{display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin-top:10px}
+  .actions{display:grid; grid-template-columns:repeat(6,1fr); gap:8px; margin-top:10px}
   button{
     appearance:none; border:none; background:#0f1736; color:var(--text); padding:10px 8px; border-radius:10px; cursor:pointer;
     border:1px solid rgba(255,255,255,.08); font-weight:600; font-size:13px; transition:transform .08s ease, background .2s ease, opacity .2s ease;
@@ -238,6 +251,9 @@
       <div class="fx-area" id="fxArea"></div>
       <div class="bubble" id="bubble">I’m feeling great!</div>
       <canvas id="tunnelGame"></canvas>
+      <button id="btnExitGame" class="exit-game" title="Exit game">Exit</button>
+      <div id="chevLeft" class="chevron chevron-left">‹</div>
+      <div id="chevRight" class="chevron chevron-right">›</div>
     </div>
 
     <div class="bars">
@@ -269,6 +285,7 @@
       <button id="btnClean"  title="Clean">🧼 Clean</button>
       <button id="btnSleep"  title="Sleep">😴 Sleep</button>
       <button id="btnHeal"   title="Heal">💊 Heal</button>
+      <button id="btnAddCat" title="Add Cat">🐾 Add</button>
     </div>
 
     <div class="emotes">
@@ -282,7 +299,7 @@
 
     <div class="foot">
       <div class="left">
-        <span>Age: <b id="age">0d</b> • Mood: <b id="mood">Happy</b></span>
+        <span>Cats: <b id="catCount">0</b> • Age: <b id="age">0d</b> • Mood: <b id="mood">Happy</b></span>
         <label class="sound" title="Toggle sounds">
           <input type="checkbox" id="soundToggle" checked />
           <span>Sound</span>
@@ -310,7 +327,8 @@
     stars: 0, starStart: Date.now(),
     sound: true, color: '#6ae3ff', bgColor: '',
     gender: null, name: '',
-    coins: 0
+    coins: 0,
+    cats: 0
   };
   const state = Object.assign({}, defaults, load() || {});
 
@@ -359,6 +377,10 @@
   const eyeL = EL('eyeL'), eyeR = EL('eyeR');
   const blinkL = EL('blinkL'), blinkR = EL('blinkR');
   const sleepEyeL = EL('sleepEyeL'), sleepEyeR = EL('sleepEyeR');
+  const exitBtn = EL('btnExitGame');
+  const chevLeft = EL('chevLeft'), chevRight = EL('chevRight');
+  const catCountEl = EL('catCount');
+  const btnAddCat = EL('btnAddCat');
 
   const emoteListEl = EL('emoteList');
   const emoteCountEl = EL('emoteCount');
@@ -472,6 +494,15 @@
   EL('btnClean').onclick = () => act('clean');
   EL('btnSleep').onclick = () => act('sleep');
   EL('btnHeal').onclick  = () => act('heal');
+  btnAddCat.onclick = () => {
+    state.cats = (state.cats || 0) + 1;
+    toast('Added a cat!');
+    if(state.cats % 10 === 0){
+      awardRandomEmote();
+    }
+    updateUI();
+    save();
+  };
   EL('btnReset').onclick = () => { localStorage.removeItem('catzee'); location.reload(); };
   btnSendEmote.onclick = () => { if(selectedEmote) sendEmote(selectedEmote); };
   btnReceiveEmote.onclick = () => listenForEmote();
@@ -623,6 +654,7 @@
   const clamp = (v,a,b)=> Math.max(a, Math.min(b, v));
 
   function updateUI(){
+    catCountEl.textContent = state.cats || 0;
     ['hunger','fun','energy','hygiene'].forEach(k=>{
       const v = Math.round(state[k]);
       texts[k].textContent = v;
@@ -767,6 +799,13 @@
     pet.style.display = 'none';
     bubble.style.display = 'none';
     fxArea.style.display = 'none';
+    exitBtn.style.display = 'block';
+    chevLeft.style.display = 'block';
+    chevRight.style.display = 'block';
+    exitBtn.onclick = endGame;
+    if(!document.fullscreenElement){
+      vp.requestFullscreen?.().catch(()=>{});
+    }
 
     const player = {x:canvas.width/2, y:canvas.height*0.8, r:15};
     const obstacles = [];
@@ -812,6 +851,13 @@
       pet.style.display = '';
       bubble.style.display = '';
       fxArea.style.display = '';
+      exitBtn.style.display = 'none';
+      chevLeft.style.display = 'none';
+      chevRight.style.display = 'none';
+      exitBtn.onclick = null;
+      if(document.fullscreenElement){
+        document.exitFullscreen().catch(()=>{});
+      }
       state.coins = (state.coins || 0) + collected;
       toast(`Collected ${collected} cat coins`);
       speak("All tired out!");

@@ -6,8 +6,8 @@
     </linearGradient>
   </defs>
   <circle cx="50" cy="60" r="40" fill="url(#g1)"/>
-  <polygon points="20,60 40,20 50,60" fill="url(#g1)"/>
-  <polygon points="80,60 60,20 50,60" fill="url(#g1)"/>
+  <polygon points="20,50 40,10 50,50" fill="url(#g1)"/>
+  <polygon points="80,50 60,10 50,50" fill="url(#g1)"/>
   <circle cx="35" cy="60" r="6" fill="#071223"/>
   <circle cx="65" cy="60" r="6" fill="#071223"/>
   <polygon points="50,70 45,75 55,75" fill="#071223"/>

@@ -206,10 +206,10 @@
             </linearGradient>
           </defs>
           <ellipse cx="100" cy="95" rx="80" ry="70" fill="url(#g1)"/>
-          <polygon points="36,80 80,0 100,80" fill="url(#g1)"/>
-          <polygon points="164,80 120,0 100,80" fill="url(#g1)"/>
-          <polygon points="48,78 80,15 100,78" fill="var(--catInner)"/>
-          <polygon points="152,78 120,15 100,78" fill="var(--catInner)"/>
+          <polygon points="36,60 80,0 100,60" fill="url(#g1)"/>
+          <polygon points="164,60 120,0 100,60" fill="url(#g1)"/>
+          <polygon points="48,60 80,10 100,60" fill="var(--catInner)"/>
+          <polygon points="152,60 120,10 100,60" fill="var(--catInner)"/>
         <ellipse cx="78" cy="70" rx="16" ry="10" fill="rgba(255,255,255,.45)"/>
         <circle id="eyeL" cx="70" cy="90" r="10" fill="#071223"/>
         <circle id="eyeR" cx="130" cy="90" r="10" fill="#071223"/>
@@ -441,6 +441,12 @@
   let loop = setInterval(tick, TICK_MS);
   catchUp();
   resetSleepTimer();
+  document.addEventListener('visibilitychange', () => {
+    if(!document.hidden){
+      catchUp();
+      resetSleepTimer();
+    }
+  });
 
   /* ---------- WebAudio (tiny synth) ---------- */
   let audioCtx = null;
@@ -522,6 +528,7 @@
         break;
       case 'play':
         if(state.sleeping){ speak("Zzz... maybe later."); wobble(); break; }
+        if(state.energy < 10){ speak("I’m too tired to play."); wobble(); break; }
         bump('fun', +24, 'bar-fun'); bump('energy', -10);
         spawnConfetti(); speak("Weeee! That was fun!");
         happyBounce();
@@ -605,8 +612,8 @@
     if(Math.random()<0.05 && !state.sleeping) blink();
     if(Math.random()<0.02 && !state.sleeping) wobble();
 
-    // Only disable play during sleep
-    EL('btnPlay').disabled = state.sleeping;
+    // Disable play when sleeping or low on energy
+    EL('btnPlay').disabled = state.sleeping || state.energy < 10;
 
     const mins = Math.floor(state.ageMinutes);
     const d = Math.floor(mins/ (60*24));
